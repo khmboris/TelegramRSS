@@ -1,8 +1,8 @@
 <?php
 global $options;
 if (
-    getenv('DEFAULT_RPM') === false
-    || getenv('DEFAULT_ERRORS_LIMIT') === false
+    getenv('RPM') === false
+    || getenv('ERRORS_LIMIT') === false
     || getenv('CLIENTS_SETTINGS') === false
 ) {
     throw new RuntimeException(

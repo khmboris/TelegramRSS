@@ -12,15 +12,18 @@ class AccessControl
 
     /** @var int Interval to remove old clients: 60 seconds */
     private const CLEANUP_INTERVAL_MS = 60*1000;
-    private int $rpmLimit;
-    private int $errorsLimit;
-    /** @var int[]  */
+    private array $rpmLimit;
+    private array $errorsLimit;
     private array $clientsSettings;
 
     public function __construct()
     {
-        $this->rpmLimit = (int) Config::getInstance()->get('access.default_rpm');
-        $this->errorsLimit = (int) Config::getInstance()->get('access.default_errors_limit');
+        $this->rpmLimit['messages'] = (int) Config::getInstance()->get('access.rpm');
+        $this->rpmLimit['media'] = (int) Config::getInstance()->get('access.media_rpm');
+
+        $this->errorsLimit['messages'] = (int) Config::getInstance()->get('access.errors_limit');
+        $this->errorsLimit['media'] = (int) Config::getInstance()->get('access.media_errors_limit');
+
         $this->clientsSettings = (array) Config::getInstance()->get('access.clients_settings');
 
         Timer::tick(static::CLEANUP_INTERVAL_MS, function () {
@@ -46,9 +49,11 @@ class AccessControl
     public function getOrCreateUser($ip)
     {
         if (!isset($this->users[$ip])) {
-            $user = $this->users[$ip] = new User(
-                $this->clientsSettings[$ip]['rpm'] ?? $this->rpmLimit,
-                $this->clientsSettings[$ip]['errorsLimit'] ?? $this->errorsLimit
+            $this->users[$ip] = new User(
+                $this->clientsSettings[$ip]['rpm'] ?? $this->rpmLimit['messages'],
+                $this->clientsSettings[$ip]['media_rpm'] ?? $this->clientsSettings[$ip]['rpm'] ?? $this->rpmLimit['media'],
+                $this->clientsSettings[$ip]['errors_limit'] ?? $this->errorsLimit['messages'],
+                $this->clientsSettings[$ip]['media_errors_limit'] ?? $this->clientsSettings[$ip]['errors_limit'] ?? $this->errorsLimit['media'],
             );
         }
 

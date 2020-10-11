@@ -4,19 +4,32 @@ namespace TelegramRSS\AccessControl;
 
 class User
 {
-    public int $rpmLimit = 15;
-    public int $errorsLimit = 0;
-    public int $rpm = 0;
 
-    /** @var int[] array of timestamps */
-    private array $requests = [];
+    public array $rpmLimit = [
+        'media' => 15,
+        'messages' => 15,
+    ];
+    public array $errorsLimit = [
+        'media' => 0,
+        'messages' => 0,
+    ];
+    public array $rpm = [
+        'media' => 0,
+        'messages' => 0,
+    ];
+
+    /** @var array of timestamps */
+    private array $requests = [
+        'media' => [],
+        'messages' => [],
+    ];
 
     public array $errors = [];
 
     private bool $permanentBan = false;
     private int $banLastDuration = 0;
     private int $banUntilTs = 0;
-
+    private int $lastAccessTs = 0;
 
     private const RPM_TTL = '-1 minute';
     private const TTL = '-5 minutes';
@@ -32,12 +45,18 @@ class User
         24 * 60 * 60,
     ];
 
-    public function __construct(?int $rpmLimit = null, ?int $errorsLimit = null)
+    public function __construct(int $rpmLimit, int $mediaRpmLimit, int $errorsLimit, int $mediaErrorsLimit)
     {
-        $this->rpmLimit = $rpmLimit ?? $this->rpmLimit;
-        $this->errorsLimit = $errorsLimit ?? $this->errorsLimit;
+        $this->rpmLimit = [
+            'messages' => $rpmLimit,
+            'media' => $mediaRpmLimit
+        ];
+        $this->errorsLimit = [
+            'messages' => $errorsLimit,
+            'media' => $mediaErrorsLimit
+        ];
 
-        if ($this->rpmLimit === 0) {
+        if ($this->rpmLimit['messages'] === 0 && $this->rpmLimit['media'] === 0) {
             $this->permanentBan = true;
             $this->addError("Request from this IP forbidden", '');
         }
@@ -45,36 +64,35 @@ class User
 
     public function isOld(?int $now = null): bool
     {
-        if (\is_null($now)) {
+        if ($now === null) {
             $now = time();
         }
 
-        return $this->getLastAccessTs() < strtotime(static::TTL, $now)
+        return $this->lastAccessTs < strtotime(static::TTL, $now)
             && $this->banUntilTs < strtotime(static::BAN_TTL)
         ;
     }
 
-    public function addRequest(string $url): void
+    public function addRequest(string $url, string $type): void
     {
         if ($this->isBanned()) {
             return;
         }
 
-        $this->requests[] = time();
-        $this->rpm = $this->getRPM();
+        if ($type !== 'media') {
+            $type = 'messages';
+        }
 
-        if ($this->rpmLimit === -1) {
+        $this->requests[$type][] = $this->lastAccessTs = time();
+        $this->rpm[$type] = $this->getRPM($type);
+
+        if ($this->rpmLimit[$type] === -1) {
             return;
         }
 
-        if ($this->rpm > $this->rpmLimit) {
+        if ($this->rpm[$type] > $this->rpmLimit[$type]) {
             $this->addError("Too many requests", $url);
         }
-    }
-
-    public function getLastAccessTs(): int
-    {
-        return end($this->requests);
     }
 
     public function isBanned(): bool
@@ -126,10 +144,10 @@ class User
         }
     }
 
-    private function getRPM(): int
+    private function getRPM(string $type): int
     {
-        $this->trimByTtl($this->requests, static::RPM_TTL);
-        return \count($this->requests);
+        $this->trimByTtl($this->requests[$type], static::RPM_TTL);
+        return \count($this->requests[$type]);
     }
 
     private function trimByTtl(array &$array, string $ttl, ?string $tsKey = 'ts'): array

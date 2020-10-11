@@ -190,7 +190,7 @@ class Controller {
         }
 
         if ($this->request['peer']) {
-            $this->user->addRequest($this->request['url']);
+            $this->user->addRequest($this->request['url'], $this->response['type']);
 
             if ($this->user->isBanned()) {
                 $this->response['code'] = 400;
